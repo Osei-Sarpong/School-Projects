@@ -1,0 +1,359 @@
+% Task 1
+% Q1
+% setting seed for reproducibility
+rng(1209);
+% Dimensions
+m = 5000; 
+n = 3000; 
+p = 4000; 
+q = 1000;
+
+% Q2
+% Setting seed for reproducibility
+rng(234);
+% Create A and B
+A = randn(m, n); 
+B = randn(n, p);
+
+% Compute exact product
+C = A * B;
+
+% Q3
+% Random projection method
+tic; % start timer
+P = randn(n, q);          
+Ared = A * P;             
+Bred = P' * B;            
+Cred = Ared * Bred;
+cred_time = toc; % end timer
+
+% This part was to just get a look at what's going on
+% Print first three rows and columns of exact product
+disp('First 3 rows and 3 columns of the exact product (C):');
+disp(C(1:3, 1:3));
+
+% Print first three rows and columns of approximate product
+disp('First 3 rows and 3 columns of the approximate product (Cred):');
+disp(Cred(1:3, 1:3));
+
+% Q4
+% Sampling method to approximate C
+% 4a
+tic; % start timer
+c = q;  % Number of samples
+% 4b
+pk = sum(A.^2, 1) / sum(sum(A.^2));  % Probabilities proportional to column norms of A
+
+% 4c & 4d
+Csample = zeros(m, p);  % Initialize sampled product matrix
+
+for t = 1:c
+    % Randomly select index k with probability pk
+    k = randsample(1:n, 1, true, pk);
+    
+    % Compute column vector Ct
+    Ct = (1 / sqrt(c * pk(k))) * A(:, k); 
+    
+    % Compute row vector Rt
+    Rt = (1 / sqrt(c * pk(k))) * B(k, :); 
+    
+    % Accumulate the product Ct * Rt
+    Csample = Csample + Ct * Rt;
+end
+
+csample_time = toc; % end timer
+
+% Again get a look at what's going on
+% Print first three rows and columns of exact product
+disp('First 3 rows and 3 columns of the exact product (C):');
+disp(C(1:3, 1:3));
+
+% Print first three rows and columns of approximate product
+disp('First 3 rows and 3 columns of the approximate product (Csample):');
+disp(Csample(1:3, 1:3));
+
+% Q5a
+cred_norm = norm(C-Cred, 'fro');
+% Q5b
+csample_norm = norm(C-Csample,'fro');
+
+
+% Display results
+fprintf('Norm Differences between C and Cred: %.4f\n', cred_norm);
+fprintf('Computation time for Csample: %.4f\n', cred_time);
+fprintf('Norm Differences between C and Csample: %.4f\n', csample_norm);
+fprintf('Computation time for Csample: %.4f\n', csample_time);
+
+
+% Task 2
+%  Q1
+A = double(imread('cameraman.tif')); % Load the image and convert to double
+
+[m, n] = size(A); % Get the dimensions of the image
+
+% Q2
+cs = [10, 20, 50, 100]; % Different values of c
+
+% Q2a : Random Projection Method
+tic; %start timer
+reconImages_rp = {}; % Store reconstructed images
+errors_rp = []; % Store reconstruction errors
+
+for c = cs
+    % Generate random Gaussian matrix
+    Omega = randn(n, c);
+    
+    % Compute sampled matrix
+    Y = A * Omega;
+    
+    % Economic QR decomposition
+    [Q, ~] = qr(Y, 0);
+    
+    % Reduced matrix
+    B = Q' * A;
+    
+    % Compute SVD of B
+    [UB, S, V] = svd(B, 'econ');
+    
+    % Approximate left singular vectors
+    U = Q * UB;
+    
+    % Reconstruct the image
+    A_recon = U * S * V';
+    reconImages_rp{end + 1} = A_recon; % Save reconstructed image
+    
+    % Compute reconstruction error (Frobenius norm difference)
+    error = norm(A - A_recon, 'fro') / norm(A, 'fro');
+    errors_rp = [errors_rp, error];
+end
+randprojtime = toc; %store computation time
+
+% Q2b: Sampling method
+tic; %start timer
+reconImages_sb = {}; % Store reconstructed images
+errors_sb = []; % Store reconstruction errors
+
+for c = cs
+    % Compute probabilities for sampling
+    col_norms = sum(A.^2, 1);
+    p = col_norms / sum(col_norms); % Probability distribution
+    
+    % Sample c columns
+    indices = randsample(1:n, c, true, p); % Sample with replacement
+    Asub = A(:, indices);
+    
+    % Compute SVD of the sampled subset
+    [Usub, Ssub, Vsub] = svd(Asub, 'econ');
+    
+    % Reconstruct the image
+    A_recon = zeros(m, n);
+    A_recon(:, indices) = Usub * Ssub * Vsub';
+    reconImages_sb{end + 1} = A_recon; % Save reconstructed image
+    
+    % Compute reconstruction error (Frobenius norm difference)
+    error = norm(A - A_recon, 'fro') / norm(A, 'fro');
+    errors_sb = [errors_sb, error];
+end
+samptime = toc; %store computation time
+
+% Q3
+figure;
+subplot(2, length(cs)+1, 1);
+imshow(uint8(A));
+title('Original Image');
+
+% Display Random Projection results
+for i = 1:length(cs)
+    subplot(2, length(cs)+1, i+1);
+    imshow(uint8(reconImages_rp{i}));
+    title(['RP, c = ', num2str(cs(i))]);
+end
+
+% Display Sampling results
+for i = 1:length(cs)
+    subplot(2, length(cs)+1, length(cs)+1+i);
+    imshow(uint8(reconImages_sb{i}));
+    title(['Sampling, c = ', num2str(cs(i))]);
+end
+
+figure;
+plot(cs, errors_rp, '-o', 'LineWidth', 2);
+hold on;
+plot(cs, errors_sb, '-x', 'LineWidth', 2);
+xlabel('Number of Columns (c)');
+ylabel('Reconstruction Error (Relative Frobenius Norm)');
+legend('Random Projection', 'Sampling-Based');
+title('Reconstruction Error vs. Number of Columns');
+grid on;
+
+compression_ratios = cs .* (m + n) ./ (m * n);
+disp('Compression Ratios:');
+disp(compression_ratios);
+disp('Random projection compuation time: ');
+disp(randprojtime);
+disp('Sampling computation time: ');
+disp(samptime);
+
+% Task 3
+% Q1
+m = 10000; 
+n = 5000; 
+q = 1000;
+
+A = randn(m, n); % Matrix A with standard normal entries
+b = randn(m, 1); % Vector b with standard normal entries
+
+% Q2
+tic; % start timer
+x_standard = A \ b; % Solve least-squares problem
+residual_standard = norm(A * x_standard - b, 2); % Compute residual norm
+disp(['Residual norm (standard): ', num2str(residual_standard)]);
+standard_time = toc;
+
+% Q3a
+tic; % start timer
+S = sprandn(q, m, 0.01); % Sparse random matrix with 1% non-zero entries
+Asketch = S * A; 
+bsketch = S * b;
+
+x_sketch = Asketch \ bsketch; % Solve sketched least-squares problem
+residual_sketch = norm(A * x_sketch - b, 2); % Compute residual norm
+disp(['Residual norm (random projection): ', num2str(residual_sketch)]);
+rand_proj_time = toc;
+
+
+% Q3b
+tic; % start timer
+row_norms = sum(A.^2, 2); % Compute squared row norms
+p = row_norms / sum(row_norms); % Normalize to probabilities
+
+indices = randsample(1:m, q, true, p); % Sample row indices with replacement
+Asub = A(indices, :) ./ sqrt(p(indices)); % Scale sampled rows
+bsub = b(indices) ./ sqrt(p(indices));   % Scale corresponding b entries
+
+x_sample = Asub \ bsub; % Solve sampled least-squares problem
+residual_sample = norm(A * x_sample - b, 2); % Compute residual norm
+disp(['Residual norm (sampling): ', num2str(residual_sample)]);
+sampling_time = toc;
+
+
+% Q4
+disp(['Computation time of standard method: ', num2str(standard_time)]);
+disp(['Computation time of random projection method: ', num2str(rand_proj_time)]);
+disp(['Computation time of sampling method: ', num2str(sampling_time)]);
+
+% Task 4
+% Q1
+% Parameters
+m = 5000;
+n = 1000;
+
+% Create a Symmetric Positive Definite Matrix A
+% Generate a random matrix B
+B = randn(m, m);
+
+% Create symmetric positive definite matrix A
+A = B * B';
+
+% Q2
+tic; %start timer
+%Compute Eigenvalues and Eigenvectors using Built-in eig
+% Compute eigenvalues and eigenvectors of A
+[eigVectors, eigValues] = eig(A);
+
+% Extract and sort the eigenvalues in descending order
+eigenvalues = diag(eigValues); % Extract diagonal elements
+[sortedEigenvalues, idx] = sort(eigenvalues, 'descend'); % Sort in descending order
+
+% Display the largest 10 eigenvalues
+disp('Largest 10 Eigenvalues (Built-in eig):');
+disp(sortedEigenvalues(1:10)); 
+standard_time = toc; % store computation time
+
+% Q3a
+tic; % start timer
+% Random Projection Method
+% Create a random Gaussian matrix P of size n × m
+P = randn(n, m);
+
+% Compute the reduced matrix Ared   
+Ared = P * A * P';
+
+% Compute eigenvalues and eigenvectors of the reduced matrix
+[eigVectorsRed, eigValuesRed] = eig(Ared);
+reducedEigenvalues = diag(eigValuesRed); % Extract diagonal elements
+[sortedReducedEigenvalues, idxRed] = sort(reducedEigenvalues, 'descend');
+
+% Display the largest 10 eigenvalues
+disp('Largest 10 Eigenvalues (Random Projection):');
+disp(sortedReducedEigenvalues(1:10));
+
+% Project the eigenvectors of Ared back to the original space
+projEigenVectors = P' * eigVectorsRed(:, idxRed(1:10));
+originalEigenVectors = eigVectors(:, idx(1:10));
+
+% Compute the norm of the difference for eigenvalues
+eigenvalueDiffNorm = norm(sortedReducedEigenvalues(1:10) - sortedEigenvalues(1:10));
+randprojtime = toc; % store computation time
+
+% Compute the norm of the difference for projected eigenvectors
+eigenvectorDiffNorms = vecnorm(originalEigenVectors - projEigenVectors);
+
+disp('Norm of Eigenvalue Differences (Random Projection):');
+disp(eigenvalueDiffNorm);
+disp('Norms of Eigenvector Differences (Random Projection):');
+disp(eigenvectorDiffNorms);
+
+
+
+% Q3b
+tic; %start timer
+% Sampling Method
+% Compute the column norms of A
+col_norms = sum(A.^2, 1);
+probabilities = col_norms / sum(col_norms); % Sampling probabilities
+
+% Randomly sample n columns with probabilities pi
+indices = randsample(m, n, true, probabilities); % Sample with replacement
+Asub = A(:, indices);
+
+% Scale sampled columns by 1/sqrt(pi)
+scalingFactors = 1 ./ sqrt(probabilities(indices));
+Asub = Asub .* scalingFactors;
+
+% Compute eigenvalues and eigenvectors of the sampled matrix
+[eigVectorsSub, eigValuesSub] = eig(Asub' * Asub); % Asub' * Asub is symmetric
+sampledEigenvalues = diag(eigValuesSub);
+[sortedSampledEigenvalues, idxSub] = sort(sampledEigenvalues, 'descend');
+
+% Display the largest 10 eigenvalues
+disp('Largest 10 Eigenvalues (Sampling):');
+disp(sortedSampledEigenvalues(1:10));
+
+% Compute cosine similarity and Frobenius norm of the projection matrices
+originalProjMatrix = eigVectors(:, idx(1:10)) * eigVectors(:, idx(1:10))';
+sampledProjMatrix = eigVectorsSub(:, idxSub(1:10)) * eigVectorsSub(:, idxSub(1:10))';
+
+samptime = toc; % store computation time
+
+% I commented out this part because I was not making much progress here
+% Cosine similarity between original and sampled eigenvectors
+%cosineSimilarity = diag(originalProjMatrix' * sampledProjMatrix);
+
+% Frobenius norm difference
+%frobeniusNormDiff = norm(originalProjMatrix - sampledProjMatrix, 'fro');
+
+%disp('Cosine Similarities (Sampling):');
+%disp(cosineSimilarity);
+%disp('Frobenius Norm Difference (Sampling):');
+%disp(frobeniusNormDiff);
+
+disp('Standard computation time: ');
+disp(standard_time);
+disp('Random projection computation time: ');
+disp(randprojtime);
+disp('Sapling compuation time: ');
+disp(samptime);
+
+
+

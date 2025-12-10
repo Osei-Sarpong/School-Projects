@@ -1,0 +1,221 @@
+% Assignment 2
+% Task 1
+[U,X] = qr(randn(80));
+[V,X] = qr(randn(80));
+S=diag(2.^(-1:-1:-80));
+A = U*S*V;
+% Q1
+% Classical Gram-Schmidt
+function [Q, R] = clgs(A)
+    [m, n] = size(A);
+    Q = zeros(m, n);
+    R = zeros(n, n);
+    
+    for k = 1:n
+        % Start with the k-th column of A
+        Q(:, k) = A(:, k);
+        
+        for j = 1:k-1
+            % Project onto the previous vectors
+            R(j, k) = Q(:, j)' * A(:, k);
+            Q(:, k) = Q(:, k) - R(j, k) * Q(:, j);
+        end
+        
+        % Normalize the vector
+        R(k, k) = norm(Q(:, k));
+        Q(:, k) = Q(:, k) / R(k, k);
+    end
+end
+
+
+[QC ,RC] = clgs(A); 
+
+% Q2
+% Modified Gram-Schmidt
+function [Q, R] = mgs(A)
+    [m, n] = size(A);  % Get the dimensions of A
+    Q = zeros(m, n);   % Initialize Q
+    R = zeros(n, n);   % Initialize R
+
+    for i = 1:n
+        % Start with the i-th column of A
+        v_i = A(:, i);
+        
+        % Normalize v_i to get q_i
+        R(i, i) = norm(v_i);
+        Q(:, i) = v_i / R(i, i);
+        
+        % Orthogonalize the subsequent vectors against q_i
+        for j = i+1:n
+            R(i, j) = Q(:, i)' * A(:, j);  % Compute the projection
+            A(:, j) = A(:, j) - R(i, j) * Q(:, i);  % Subtract the projection
+        end
+    end
+end
+
+
+
+[QM ,RM] = mgs(A);
+
+
+% Q3
+% Extract the diagonal entries of RC and RM
+diag_RC = abs(diag(RC));
+diag_RM = abs(diag(RM));
+
+% Plotting
+figure;
+j = 1:80;
+semilogy(j, diag_RC, 'o', 'DisplayName', 'Classical Gram-Schmidt'); % Circles for CGS
+hold on;
+semilogy(j, diag_RM, 'x', 'DisplayName', 'Modified Gram-Schmidt'); % Crosses for MGS
+
+% Adding plot details
+xlabel('j');
+ylabel('R_{jj}');
+title('Computed R_{jj} vs j for QR Factorization');
+legend;
+grid on;
+
+
+
+% Task 3
+% Q1
+m = 50;
+n = 12;
+t = linspace(0, 1, m)';  % Column vector with linearly spaced points from 0 to 1
+A = fliplr(vander(t));    % Flip the columns of the Vandermonde matrix
+A = A(1:m, 1:n);          % Take the first m rows and n columns
+
+% Q2
+b = cos(4 * t);
+
+% Q3
+% Form the normal equations and solve
+x_normal = (A' * A) \ (A' * b);
+
+% Q4
+% Q and R should be such that A = Q * R
+[Q, R] = mgs(A);  % Replace this with your Task 1 code
+% Solve using QR factorization from Modified Gram-Schmidt
+x_mgs = R \ (Q' * b);
+
+% Q5
+[Q, R] = qr(A);
+% Solve using QR factorization from MATLAB
+x_qr = R \ (Q' * b);
+
+% Q6
+% Solve using direct approach
+x_direct = A \ b;
+
+% Q7
+% Solve using svd
+[U, S, V] = svd(A, 'econ');
+x_svd = V' \ (S \ (U' * b));
+
+% Q8
+% Store all coefficient vectors in a matrix for comparison
+coefficients = [x_normal, x_mgs, x_qr, x_direct, x_svd];
+
+% Display the coefficients in a high precision format
+format long g
+disp('Coefficients from each method:');
+disp(array2table(coefficients, 'VariableNames', {'NormalEq', 'MGS', 'QR', 'Backslash', 'SVD'}));
+
+% Restore default format for further calculations
+format short
+
+
+
+
+% Task 4
+% Q1
+m = 10000;
+
+% Set seed
+rng(22);
+
+% Generate a random matrix and make it symmetric positive definite
+R = rand(m, m);
+A = R' * R + m * eye(m);  % A symmetric positive definite matrix of size m x m
+
+% Generate a random vector b
+b = rand(m, 1);
+
+% Q2
+% Transfer A and b to the GPU
+A_gpu = gpuArray(A);
+b_gpu = gpuArray(b);
+
+% Perform Cholesky factorization on the GPU
+L_gpu = chol(A_gpu, 'lower');  % 'lower' specifies that L is lower triangular
+
+% Solve the system Ax = b using forward and backward substitution
+% First solve L * y = b for y (forward substitution)
+y_gpu = L_gpu \ b_gpu;
+
+% Now solve L' * x = y for x (backward substitution)
+x_gpu = L_gpu' \ y_gpu;
+
+% Transfer result back to CPU for accuracy analysis
+x = gather(x_gpu);
+
+% Checking for precision
+residual = norm(A * x - b);
+
+disp(['Residual: ', num2str(residual)]);
+
+if residual < 1e-10
+    disp('Accurate solution.');
+else
+    disp('Inaccurate solution.');
+end
+
+% Q3
+% Solve the QP problem using the Cholesky factorization
+% First solve L * y = -b for y (forward substitution)
+y_qp_gpu = L_gpu \ -b_gpu;
+
+% Now solve L' * x = y for x (backward substitution)
+x_qp_gpu = L_gpu' \ y_qp_gpu;
+
+% Transfer result back to CPU for accuracy analysis
+x_qp = gather(x_qp_gpu);
+
+% Checking for precision
+residual = norm(A * x_qp + b);
+
+disp(['Residual: ', num2str(residual)]);
+
+if residual < 1e-10
+    disp('Accurate solution.');
+else
+    disp('Inaccurate solution.');
+end
+
+
+% Task 5
+% Define the range of x values
+x = 1.920:0.001:2.080;
+
+% Evaluate the polynomial using the expanded form
+p_expanded = x.^9 - 18*x.^8 + 144*x.^7 - 672*x.^6 + 2016*x.^5 ...
+             - 4032*x.^4 + 5376*x.^3 - 4608*x.^2 + 2304*x - 512;
+
+% Evaluate the polynomial using the factored form
+p_factored = (x - 2).^9;
+
+% Plot both forms
+figure;
+plot(x, p_expanded, 'b-', 'LineWidth', 1.5); % Plot expanded form in blue
+hold on;
+plot(x, p_factored, 'r--', 'LineWidth', 1.5); % Plot factored form in red
+hold off;
+
+% Customize plot
+title('Polynomial Evaluation of p(x) = (x - 2)^9');
+xlabel('x');
+ylabel('p(x)');
+legend('Expanded Form', 'Factored Form');
+grid on;

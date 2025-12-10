@@ -1,0 +1,461 @@
+% Assignment 3
+% Task 1
+% Q1a
+function [eigenvalue, eigenvector] = powerIteration(A, maxIter, tol)
+    % Input:
+    % A - GPU matrix (size m x m)
+    % maxIter - maximum number of iterations
+    % tol - tolerance for convergence
+    
+    % Initialize a random vector on the GPU and normalize it
+    m = size(A, 1);
+    v = gpuArray.rand(m, 1); % Random vector on GPU
+    v = v / norm(v); % Normalize
+    
+    % Initialize eigenvalue
+    eigenvalue = 0;
+    
+    % Iterate to compute dominant eigenvalue and eigenvector
+    for k = 1:maxIter
+        % Apply matrix A
+        w = A * v; 
+        
+        % Normalize w to get v(k)
+        v_new = w / norm(w);
+        
+        % Compute the Rayleigh quotient
+        new_eigenvalue = v_new' * A * v_new;
+        
+        % Check for convergence
+        if abs(new_eigenvalue - eigenvalue) < tol
+            break;
+        end
+        
+        % Update for next iteration
+        eigenvalue = new_eigenvalue;
+        v = v_new;
+    end
+    
+    % Output the final eigenvector and eigenvalue
+    eigenvector = v;
+end
+
+% Q1b
+% Applying the function on a random matrix
+m = 10000;
+A = gpuArray.rand(m, m); % Random 10000x10000 matrix on GPU
+maxIter = 1000;          % Maximum iterations
+tol = 1e-6;              % Convergence tolerance
+
+% Call the Power Iteration function
+[eigenvalue, eigenvector] = powerIteration(A, maxIter, tol);
+
+% Display results
+disp('Dominant eigenvalue from power iteration:');
+disp(eigenvalue);
+disp('First 10 components of eigenvector:');
+disp(gather(eigenvector(1:10))); % Gather results from GPU to display
+
+% Q2a
+function [eigenvalue, eigenvector] = inverseIteration(A, mu, maxIter, tol)
+    % Input:
+    % A - GPU matrix (size m x m)
+    % mu - initial shift (eigenvalue guess)
+    % maxIter - maximum number of iterations
+    % tol - tolerance for convergence
+    
+    % Initialize a random vector on the GPU and normalize it
+    m = size(A, 1);
+    v = gpuArray.rand(m, 1); % Random vector on GPU
+    v = v / norm(v); % Normalize
+    
+    % Compute the shifted matrix (A - mu * I)
+    I = gpuArray.eye(m); % Identity matrix on GPU
+    shiftedA = A - mu * I; % Shifted matrix
+    
+    % Initialize eigenvalue
+    eigenvalue = 0;
+    
+    % Iterate to refine eigenvalue and eigenvector
+    for k = 1:maxIter
+        % Solve (A - mu * I) w = v for w
+        w = shiftedA \ v; 
+        
+        % Normalize w to get v(k)
+        v_new = w / norm(w);
+        
+        % Compute the Rayleigh quotient
+        new_eigenvalue = v_new' * A * v_new;
+        
+        % Check for convergence
+        if abs(new_eigenvalue - eigenvalue) < tol
+            break;
+        end
+        
+        % Update for next iteration
+        eigenvalue = new_eigenvalue;
+        v = v_new;
+    end
+    
+    % Output the final eigenvector and eigenvalue
+    eigenvector = v;
+end
+
+% Q2b
+% Applying the function
+% Use the dominant eigenvalue from Power Iteration as the initial shift
+mu = eigenvalue;
+[eigenvalue_inv, eigenvector_inv] = inverseIteration(A, mu, maxIter, tol);
+
+% Display results
+disp('Eigenvalue from Inverse Iteration:');
+disp(eigenvalue_inv);
+disp('First 10 components of eigenvector:');
+disp(gather(eigenvector_inv(1:10))); % Gather results from GPU to display
+
+
+% Task 2
+% Q1a
+function [lambda, v, iterations] = rayleigh_quotient_iteration(A, v0, tol, max_iter)
+% RAYLEIGH_QUOTIENT_ITERATION Computes the dominant eigenvalue and eigenvector
+% using the Rayleigh Quotient Iteration algorithm.
+%
+% Inputs:
+% A - Input matrix (square, numerical)
+% v0 - Initial guess for the eigenvector (column vector)
+% tol - Convergence tolerance for eigenvalue and eigenvector
+% max_iter - Maximum number of iterations
+%
+% Outputs:
+% lambda - Dominant eigenvalue
+% v - Corresponding normalized eigenvector
+% iterations - Number of iterations performed
+
+    v = v0 / norm(v0); % Normalize the initial guess
+    lambda = v' * A * v; % Initial Rayleigh quotient
+    iterations = 0; % Initialize iteration counter
+
+    for k = 1:max_iter
+        iterations = k;
+        % Solve (A - lambda * I) w = v
+        w = (A - lambda * eye(size(A))) \ v;
+        % Normalize the vector
+        v = w / norm(w);
+        % Compute the new Rayleigh quotient
+        lambda_new = v' * A * v;
+        
+        % Check convergence
+        if abs(lambda_new - lambda) < tol
+            lambda = lambda_new; % Update and exit
+            break;
+        end
+        lambda = lambda_new; % Update for the next iteration
+    end
+
+    if iterations == max_iter
+        warning('Rayleigh Quotient Iteration did not converge within the maximum iterations.');
+    end
+end
+
+% Q2a
+% Transition matrix P for the web graph
+P = [0, 0, 1/2, 0, 0, 0;  % Page A
+     1/2, 0, 0, 0, 0, 0;  % Page B
+     1/2, 1/2, 0, 0, 0, 0; % Page C
+     0, 1/2, 1/2, 0, 0, 0; % Page D
+     0, 0, 0, 1, 0, 1;    % Page E
+     0, 0, 0, 0, 1, 0];   % Page F
+
+% Q2c
+% Initial vector
+v0 = rand(6, 1); % Random initial guess
+tol = 1e-6; % Convergence tolerance
+max_iter = 1000; % Maximum number of iterations
+
+% Call the Rayleigh Quotient Iteration function
+[lambda, v, iterations] = rayleigh_quotient_iteration(P, v0, tol, max_iter);
+
+% Display the results
+disp('Dominant eigenvalue (PageRank):');
+disp(lambda);
+disp('Corresponding eigenvector (PageRank scores):');
+disp(v);
+disp('Number of iterations:');
+disp(iterations);
+
+% Task 4
+% Q1a
+m = 20000;                % Matrix size
+A = sprand(m, m, 0.01);   % Sparse random matrix with density 0.01
+b = rand(m, 1);           % Random initial vector
+
+%Q1b
+function [H, V] = arnoldi_iteration(A, b, k)
+    % Inputs:
+    %   A - Sparse matrix (m x m)
+    %   b - Initial vector (m x 1)
+    %   k - Number of Arnoldi iterations
+    % Outputs:
+    %   H - Upper Hessenberg matrix (k x k)
+    %   V - Orthonormal basis matrix (m x k)
+    
+    m = length(b);
+    V = zeros(m, k);   % To store orthonormal basis
+    H = zeros(k, k);   % Upper Hessenberg matrix
+
+    % Normalize initial vector
+    V(:, 1) = b / norm(b);
+
+    for j = 1:k
+        % Matrix-vector multiplication
+        w = A * V(:, j);
+        
+        % Orthogonalize w against existing basis vectors
+        for i = 1:j
+            H(i, j) = V(:, i)' * w;
+            w = w - H(i, j) * V(:, i);
+        end
+        
+        % Compute the next basis vector
+        if j < k
+            H(j+1, j) = norm(w);
+            if H(j+1, j) ~= 0
+                V(:, j+1) = w / H(j+1, j);
+            end
+        end
+    end
+end
+
+k = 10;  % Number of Arnoldi iterations
+[H, V] = arnoldi_iteration(A, b, k);
+
+% Q1c
+% Display H (Hessenberg matrix)
+disp('H (Hessenberg Matrix):');
+disp(H);
+
+% Display first 10 rows of V
+disp('First 10 rows of V (Orthonormal Basis):');
+disp(V(1:10, :));
+
+
+% Q2a
+m = 10000;
+A = sprand(m, m, 0.01);        % Sparse random matrix
+A = 0.5 * (A + A') + m * speye(m); % Symmetric and positive definite
+b = randn(m, 1);               % Random initial vector
+
+% Q2b
+function [T, V] = lanczos_iteration(A, b, k)
+    % Inputs:
+    %   A - Sparse symmetric matrix (m x m)
+    %   b - Initial vector (m x 1)
+    %   k - Number of Lanczos iterations
+    % Outputs:
+    %   T - Tridiagonal matrix (k x k)
+    %   V - Orthonormal basis matrix (m x k)
+    
+    m = length(b);
+    V = zeros(m, k);   % To store orthonormal basis
+    T = zeros(k, k);   % Tridiagonal matrix
+
+    % Normalize initial vector
+    beta = 0;
+    v_prev = zeros(m, 1);
+    V(:, 1) = b / norm(b);
+
+    for j = 1:k
+        if j == 1
+            w = A * V(:, j);
+        else
+            w = A * V(:, j) - beta * v_prev;
+        end
+        
+        alpha = V(:, j)' * w;  % Diagonal element
+        T(j, j) = alpha;
+
+        w = w - alpha * V(:, j);
+        
+        beta = norm(w);  % Sub/superdiagonal element
+        if j < k
+            T(j, j+1) = beta;
+            T(j+1, j) = beta;
+            v_prev = V(:, j);
+            V(:, j+1) = w / beta;
+        end
+    end
+end
+
+k = 10;  % Number of Lanczos iterations
+[T, V] = lanczos_iteration(A, b, k);
+
+% Q2c
+% Display T (Tridiagonal matrix)
+disp('T (Tridiagonal Matrix):');
+disp(T);
+
+% Display first 10 rows of V
+disp('First 10 rows of V (Orthonormal Basis):');
+disp(V(1:10, :));
+
+
+% Task 5
+% Q1
+% Initialize residuals storage
+all_residuals = cell(length(max_iter_values), 1);
+
+% Conjugate Gradient function
+function [x, residuals] = conjugate_gradient(A, b, tol, max_iter)
+    % Inputs:
+    %   A - Sparse matrix (m² x m²)
+    %   b - Right-hand side vector (m² x 1)
+    %   tol - Convergence tolerance
+    %   max_iter - Maximum number of iterations
+    % Outputs:
+    %   x - Approximate solution
+    %   residuals - Residuals at each iteration
+
+    % Initializations
+    x = zeros(size(b));  % Initial guess x₀ = 0
+    r = b;               % Initial residual r₀ = b - A*x₀ = b
+    p = r;               % Initial search direction p₀ = r₀
+    residuals = zeros(max_iter, 1); % Store residuals
+
+    for n = 1:max_iter
+        % Compute alpha (step length)
+        alpha = (r' * r) / (p' * (A * p));
+
+        % Update approximate solution
+        x = x + alpha * p;
+
+        % Update residual
+        r_new = r - alpha * (A * p);
+
+        % Store the residual norm
+        residuals(n) = norm(r_new);
+
+        % Check for convergence
+        if residuals(n) < tol
+            residuals = residuals(1:n); % Trim residuals
+            break;
+        end
+
+        % Compute beta (improvement factor)
+        beta = (r_new' * r_new) / (r' * r);
+
+        % Update search direction
+        p = r_new + beta * p;
+
+        % Update r for the next iteration
+        r = r_new;
+    end
+end
+
+% Q2a
+% Parameters
+m = 1000;                 % Grid size
+n = m^2;                  % Number of equations (m² x m²)
+% Generate random vector b
+b = rand(n, 1);
+
+
+
+% Construct 2D Poisson matrix
+e = ones(m, 1);                           % Off-diagonal elements
+T = spdiags([e -4*e e], -1:1, m, m);      % 1D Poisson stencil
+I = speye(m);                             % Identity matrix for coupling
+A = kron(I, T) + kron(T, I);              % 2D Poisson matrix
+
+tol = 1e-15;              % Convergence tolerance
+max_iter_values = [100, 200, 500, 1000, 1500, 2000]; % Different max_iter values
+
+% Run Conjugate Gradient for each max_iter
+for i = 1:length(max_iter_values)
+    [~, residuals] = conjugate_gradient(A, b, tol, max_iter_values(i));
+    all_residuals{i} = residuals; % Store residuals for this max_iter
+end
+
+% Plot results
+figure; hold on;
+for i = 1:length(max_iter_values)
+    plot(1:length(all_residuals{i}), (all_residuals{i}), 'DisplayName', ...
+         sprintf('Max Iter = %d', max_iter_values(i)));
+end
+
+% Plot settings
+xlabel('Iteration');
+ylabel('Residual Norm');
+title('Convergence of Conjugate Gradient for 2D Poisson Equation');
+grid on;
+hold off;
+
+
+% Task 3
+% QR Iteration Function with Shift
+function [V, D] = qr_iteration_shift(A, max_iter)
+    n = size(A, 1);        % Size of the matrix
+    V = eye(n);            % Initial orthonormal matrix
+    Ak = A;                % Start with the original matrix
+
+    for k = 1:max_iter
+        % Choose the shift (Rayleigh Quotient shift is a common choice)
+        mu_k = Ak(n, n);   % Use the bottom-right diagonal element as the shift
+
+        % QR Factorization with the shift
+        [Q, R] = qr(Ak - mu_k * eye(n));  % QR factorization of A_k - shift
+        Ak = R * Q + mu_k * eye(n);       % Recombine with shift
+
+        % Update V with the orthogonal matrix Q
+        V = V * Q;
+
+        % Check if off-diagonal elements are sufficiently small
+        off_diag_norm = norm(Ak - diag(diag(Ak)), 'fro');
+        if off_diag_norm < 1e-10   % Convergence criterion
+            break;
+        end
+    end
+
+    % Eigenvalues are the diagonal of the matrix Ak
+    D = diag(Ak);
+end
+
+% Load the dataset
+data = readtable('outages.csv');
+X = [data.Customers, data.Loss];
+
+% Construct the similarity matrix S
+sigma = 1; 
+n = size(X, 1);
+S = zeros(n, n);
+for i = 1:n
+    for j = 1:n
+        S(i, j) = exp(-norm(X(i,:) - X(j,:))^2 / (2 * sigma^2));
+    end
+end
+
+% Degree matrix D and Laplacian matrix L
+D = diag(sum(S, 2));
+L = D - S;
+
+% Apply QR iteration
+max_iter = 100;
+[V, D_eigenvalues] = qr_iteration_shift(L, max_iter);
+
+% Extract smallest eigenvectors (excluding zero eigenvalue)
+[sorted_eigenvalues, idx] = sort(D_eigenvalues);
+idx_smallest_eigenvalues = idx(2:4);  % Skip the zero eigenvalue (if applicable)
+Y = V(:, idx_smallest_eigenvalues);
+
+% Perform k-means clustering
+k = 3; % Number of clusters
+[idx_cluster, C] = kmeans(Y, k);
+
+% Visualize clustering results
+figure;
+gscatter(X(:,1), X(:,2), idx_cluster);
+title('Clustering Results (QR Iteration with Shift)');
+xlabel('Customers');
+ylabel('Loss');
+legend('Cluster 1', 'Cluster 2', 'Cluster 3');
+
+

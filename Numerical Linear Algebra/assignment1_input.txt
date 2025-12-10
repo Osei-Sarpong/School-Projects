@@ -1,0 +1,284 @@
+% Start recording
+diary('assignment1_output.txt');
+
+
+
+% Task 1
+% Q1
+% Setting seed for reproducability
+rng(24);
+% Generating large random matrices
+m = 20000;
+n = 1;
+A = rand(m);
+b = rand(m,n);
+
+%Q2
+% Tracking CPU computation time
+tic;
+% Solving for x
+x = A\b;
+% Computation of residual and its norm
+r = A*x - b;
+accuracy = norm(r);
+CPU_time = toc;
+disp(['Residual norm: ', num2str(accuracy)]);
+
+%Q3
+% Tracking the GPU computation time
+tic;
+% Transfering the matrices to the GPU
+gpu_A = gpuArray(A);
+gpu_b = gpuArray(b);
+% Computation of x on the GPU
+gpu_x = gpu_A\gpu_b;
+% Computation of the residual and its norm
+gpu_r = gpu_A*gpu_x - gpu_b;
+gpu_accuracy = norm(gpu_r);
+GPU_time = toc;
+% Transfer the residual back to the CPU
+accuracy2 = gather(gpu_accuracy);
+disp(['Residual norm from GPU: ', num2str(accuracy2)]);
+
+% Q4
+disp(['CPU computation time: ', num2str(CPU_time), ' seconds.']);
+disp(['GPU computation time: ', num2str(GPU_time), ' seconds.']);
+% Repition of earlier process with different matrix dimensions
+m = 30000;
+% Tracking CPU computation time
+tic;
+% Solving for x
+x = A\b;
+% Computation of residual and its norm
+r = A*x - b;
+accuracy = norm(r);
+CPU_time = toc;
+disp(['Residual norm: ', num2str(accuracy)]);
+% Tracking the GPU computation time
+tic;
+% Transfering the matrices to the GPU
+gpu_A = gpuArray(A);
+gpu_b = gpuArray(b);
+% Computation of x on the GPU
+gpu_x = gpu_A\gpu_b;
+% Computation of the residual and its norm
+gpu_r = gpu_A*gpu_x - gpu_b;
+gpu_accuracy = norm(gpu_r);
+GPU_time = toc;
+% Transfer the residual back to the CPU
+accuracy2 = gather(gpu_accuracy);
+disp(['Residual norm from GPU: ', num2str(accuracy2)]);
+% New computation times
+disp(['CPU computation time: ', num2str(CPU_time), ' seconds.']);
+disp(['GPU computation time: ', num2str(GPU_time), ' seconds.']);
+
+
+
+
+
+
+% Task 2
+% Q1
+% Generating a large sparse matrix
+A = gallery('poisson',100);
+
+%Q2
+% Converting to full matrix and tranferring to GPU
+A = full(A);
+gpu_A = gpuArray(A);
+
+%Q3
+% Computing the SVD of A on the GPU
+[U,S,V] = svd(gpu_A);
+disp(S);
+
+% Q4
+% Rank of matrix A
+r = rank(A);
+disp(['Matrix A has a rank of: ', num2str(r)]);
+% Frobenius norm
+singular_values = diag(A);
+frobenius_norm = sqrt(sum(singular_values.^2));
+disp(['This is the computed Frobenius norm using the textbook formula: ',num2str(frobenius_norm)]);
+frobenius_norm2 = norm(A, 'fro');
+disp(['This is the computed Frobenius norm using the inbuilt formula: ',num2str(frobenius_norm2)]);
+% Computation of eigenvalues and comparison with singular values
+ATA = A' * A;
+AAT = A * A';
+eigen_ATA = eig(ATA);
+eigen_AAT = eig(AAT);
+sqrt_eigen_ATA = sqrt(eigen_ATA);
+sqrt_eigen_AAT = sqrt(eigen_AAT);
+diff_norm_ATA = norm(singular_values - sqrt_eigen_ATA);
+diff_norm_AAT = norm(singular_values - sqrt_eigen_AAT);
+disp(['The norm differences between the singular values and the squared root of the eigen values of ATA and AAT are: ',num2str(diff_norm_ATA),' and ', num2str(diff_norm_AAT), ' respectively.']);
+% Matrix determinants
+determinant_A = det(A);
+disp(['The determinant of A is ', num2str(determinant_A)]);
+B = gallery("poisson", 4);
+determinant_B = det(B);
+disp(B);
+disp(['The determinant of B is ', num2str(determinant_B)]);
+
+
+
+
+
+
+
+
+% Task 3
+% Q1
+% Load and display image
+img = imread('cameraman.tif');
+imshow(img);
+% Q2
+% Image with double precision
+img2 = im2double(img);
+% Q3
+% SVD of image and singular values plot
+[U,S,V] = svd(img2);
+singular_values = diag(S);
+figure;
+plot(singular_values, 'o-');
+title('Singular Values of the Image Matrix');
+xlabel('Index');
+ylabel('Singular Value');
+grid on;
+% Q4
+% Reconstructing the image using different numbers of singular values
+number_of_singular_values = [10,25,50,100];
+figure;
+for i = 1:length(number_of_singular_values)
+    k = number_of_singular_values(i);
+    
+    % Truncating matrices to use only k singular values
+    U_k = U(:, 1:k);
+    S_k = S(1:k, 1:k);
+    V_k = V(:, 1:k);
+    
+    % Reconstructing the image using k singular values
+    img_reconstructed = U_k * S_k * V_k';
+    
+    % Displaying the reconstructed image
+    subplot(2, 2, i);
+    imshow(img_reconstructed, []);
+    title({['Reconstructed with ', num2str(k)] ' Singular Values'}, FontSize=8);
+end
+% Q5
+% Number of singular values to use for reconstruction
+singular_values_to_use = [10, 25, 50, 100, 150, 200];
+% Array to store reconstruction errors
+reconstruction_errors = zeros(1, length(singular_values_to_use));
+% Loop over the different numbers of singular values
+for i = 1:length(singular_values_to_use)
+    k = singular_values_to_use(i);  % Number of singular values to use
+    % Reconstruct the image using the first k singular values
+    U_k = U(:, 1:k);
+    S_k = S(1:k, 1:k);
+    V_k = V(:, 1:k);
+    img_reconstructed = U_k * S_k * V_k';
+    % Computing the reconstruction error (Frobenius norm of the difference)
+    reconstruction_errors(i) = norm(img2 - img_reconstructed, 'fro');
+end
+% Plot the reconstruction error as a function of the number of singular values
+figure;
+plot(singular_values_to_use, reconstruction_errors, 'o-', 'LineWidth', 2);
+xlabel('Number of Singular Values');
+ylabel('Reconstruction Error (Frobenius Norm)');
+title('Reconstruction Error vs Number of Singular Values');
+grid on;
+% Q6
+% Dimensions of the image
+[m, n] = size(img2);
+% Computing the original image size
+original_size = m * n;
+% Initialize array to store compression ratios
+compression_ratios = zeros(1, length(singular_values_to_use));
+% Looping over the different numbers of singular values
+for i = 1:length(singular_values_to_use)
+    k = singular_values_to_use(i);
+    % Compute the compressed storage size
+    compressed_size = (m * k) + (k * k) + (n * k);
+    % Compute the compression ratio
+    compression_ratios(i) = original_size / compressed_size;
+end
+% Plotting the compression ratio as a function of the number of singular values
+figure;
+plot(singular_values_to_use, compression_ratios, 'o-', 'LineWidth', 2);
+xlabel('Number of Singular Values');
+ylabel('Compression Ratio');
+title('Compression Ratio vs Number of Singular Values');
+grid on;
+
+
+
+
+
+% Task 4
+% Q1
+% Loading the dataset
+openExample('stats/RegularizeWideDatainParallelExample');
+load ovariancancer;
+% Q2
+% Total patients in both categories
+cancer_count = sum(strcmp(grp, 'Cancer'));
+normal_count = sum(strcmp(grp, 'Normal'));
+fprintf('Total patients with cancer: %d\n', cancer_count);
+fprintf('Total patients without cancer: %d\n', normal_count);
+% Q3
+% Standardizing the data
+data_standardized = (obs - mean(obs)) ./ std(obs);
+% Q4
+% Computing the SVD
+[U,S,V] = svd(data_standardized);
+% Q5
+% Plotting the singular values
+singular_values = diag(S);
+figure;
+plot(singular_values, 'o-');
+title('Singular Values of the Matrix');
+xlabel('Index');
+ylabel('Singular Value');
+% Q6
+% Variance and cumulative variance computation
+variance_explained = singular_values .^ 2 / sum(singular_values .^ 2);
+cumulative_variance_explained = cumsum(variance_explained);
+% Plotting the cumulative variance explained
+figure;
+plot(cumulative_variance_explained, 'o-', 'LineWidth', 2);
+title('Cumulative Variance Explained by Principal Components');
+xlabel('Number of Principal Components');
+ylabel('Cumulative Variance Explained');
+grid on;
+% Projecting the data onto the first three principal components
+pc1 = data_standardized * V(:,1);
+pc2 = data_standardized * V(:,2);
+pc3 = data_standardized * V(:,3);
+% Plotting the three principal components 
+figure;
+hold on;
+% Plot points based on categories
+scatter3(pc1(strcmp(grp, 'Normal')), pc2(strcmp(grp, 'Normal')), pc3(strcmp(grp, 'Normal')), ...
+         50, 'b', 'filled');
+scatter3(pc1(strcmp(grp, 'Cancer')), pc2(strcmp(grp, 'Cancer')), pc3(strcmp(grp, 'Cancer')), ...
+         50, 'r', 'filled');
+
+xlabel('PC1');
+ylabel('PC2');
+zlabel('PC3');
+title('3D Scatter Plot of the Three Principal Components');
+legend('Normal', 'Cancer');
+hold off;
+view(3);
+
+
+
+% Stop recording
+diary off;
+
+
+
+
+
+
